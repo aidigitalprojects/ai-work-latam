@@ -1,0 +1,21 @@
+AI WORK LATAM - SITIO DINAMICO DE PRUEBA
+
+Estructura:
+- index.html: página pública conectada a Supabase.
+- admin/index.html: panel de administración.
+- downloads/: guía gratuita y plantilla de CV.
+
+IMPORTANTE:
+- Esta carpeta es para desplegar y probar, no publicar masivamente todavía.
+- El panel de administración se abre en /admin/ después del despliegue.
+- La página pública muestra únicamente vacantes con estado 'publicada' y un enlace de referido válido.
+- El botón público utiliza el enlace de referido, nunca la URL oficial.
+- La vacante Spanish Bilingual Expert (Mexico) debe permanecer como borrador hasta probar el sitio.
+- No subir claves secretas ni service_role. El HTML usa solo la publishable key.
+
+PRUEBA:
+1. Crear un repositorio NUEVO para el sitio principal, separado de ai-work-latam-recovery.
+2. Subir el contenido de esta carpeta a la raíz del repositorio.
+3. Activar GitHub Pages o conectar el repositorio a Netlify.
+4. Abrir la página pública y /admin/.
+5. Mantener la vacante de prueba en borrador hasta confirmar que ambos sitios cargan y que la publicación de prueba funciona.
