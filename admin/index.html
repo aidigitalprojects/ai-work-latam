@@ -13,6 +13,17 @@
 <header class="top"><a class="brand" href="/" style="text-decoration:none;color:inherit">AI Work <span>LATAM</span> <small class="muted" style="font-size:12px;font-weight:600">/ ADMIN</small></a><div class="actions"><a class="btn ghost" href="/" style="text-decoration:none">Ver sitio</a><button id="logout" class="btn secondary hidden">Cerrar sesión</button></div></header>
 <section id="loginView" class="card login"><div class="small">ÁREA PRIVADA</div><h1 class="h1">Iniciar sesión</h1><p class="muted">Accede para administrar las vacantes de AI Work LATAM.</p><div id="loginNotice" class="notice"></div><form id="loginForm"><div class="field"><label for="email">Correo electrónico</label><input id="email" type="email" autocomplete="username" required></div><div class="field"><label for="password">Contraseña</label><input id="password" type="password" autocomplete="current-password" required></div><button class="btn" style="width:100%" type="submit">Entrar al panel</button></form><p class="small">Acceso restringido a usuarios autorizados.</p></section>
 <main id="appView" class="hidden"><div class="row"><div><div class="small">GESTIÓN DE CONTENIDO</div><h1 class="h1">Panel de control</h1><p class="muted">Administra las ofertas y sus enlaces de referido.</p></div><button id="newJob" class="btn">+ Nueva vacante</button></div>
+
+<section class="card" id="aiAssistantCard" style="margin:18px 0;border:1px solid #c4b5fd;background:linear-gradient(135deg,#fff 0%,#f5f3ff 100%)">
+  <div class="row" style="align-items:flex-start"><div><div class="small" style="color:#6d28d9;font-weight:800">NUEVA HERRAMIENTA</div><h2 style="margin:2px 0 4px;font-size:21px">Asistente IA de vacantes</h2><p class="muted" style="margin:0">Prepara la información de una oportunidad para completar el formulario de registro.</p></div><span class="pill" style="background:#ede9fe;color:#5b21b6">Etapa 1 · Interfaz</span></div>
+  <div class="field"><label for="assistantMode">¿Cómo quieres proporcionar la información?</label><select id="assistantMode"><option value="url">Tengo el enlace de la vacante</option><option value="text">Voy a pegar la descripción</option></select></div>
+  <div class="field" id="assistantUrlField"><label for="assistantUrl">Enlace de la oportunidad</label><input id="assistantUrl" type="url" placeholder="https://jobs.micro1.ai/post/..."></div>
+  <div class="field hidden" id="assistantTextField"><label for="assistantText">Descripción original de la oportunidad</label><textarea id="assistantText" maxlength="12000" rows="7" placeholder="Pega aquí la descripción completa en inglés o español..."></textarea></div>
+  <div class="actions"><button type="button" class="btn" id="assistantPrepare">Preparar información</button><button type="button" class="btn ghost" id="assistantClear">Limpiar</button></div>
+  <div id="assistantStageNotice" class="notice" aria-live="polite"></div>
+  <p class="small" style="margin-bottom:0">Etapa 1: interfaz y captura. En la etapa 2 conectaremos el análisis automático con IA. No se publicará ni guardará ninguna vacante automáticamente.</p>
+</section>
+
 <div class="grid"><div class="card stat"><strong id="totalCount">0</strong><span>Total registradas</span></div><div class="card stat"><strong id="publishedCount">0</strong><span>Publicadas</span></div><div class="card stat"><strong id="draftCount">0</strong><span>En borrador</span></div><div class="card stat"><strong id="closedCount">0</strong><span>Cerradas</span></div></div>
 <div class="layout"><section class="card" id="formCard"><div class="row"><h2 id="formTitle" style="margin:0;font-size:20px">Agregar vacante</h2><button id="resetForm" type="button" class="btn ghost">Limpiar</button></div><div id="formNotice" class="notice"></div><div class="field" style="background:#f8fafc;border:1px solid #ddd6fe;padding:14px;border-radius:12px;margin-top:16px">
 <label for="sourceUrl">Pegar enlace para intentar extraer datos</label>
@@ -97,5 +108,35 @@ const query=id?db.from('vacantes').update(payload).eq('id',id):db.from('vacantes
 $('jobsList').addEventListener('click',async e=>{const edit=e.target.closest('[data-edit]'),toggle=e.target.closest('[data-toggle]'),del=e.target.closest('[data-delete]');if(edit){const j=allJobs.find(x=>x.id===edit.dataset.edit);if(j)fillForm(j);return;}if(toggle){const j=allJobs.find(x=>x.id===toggle.dataset.toggle);if(!j)return;const next=j.estado==='publicada'?'borrador':'publicada';const hasReferral=j.tipo_referido==='general'?!!j.url_referido_general:!!j.url_referido;if(next==='publicada'&&!hasReferral){notice('formNotice','No se puede publicar: esta vacante no tiene un enlace de referido. Edítala y agrega uno.','error');return;}const patch={estado:next,updated_at:new Date().toISOString()};if(next==='publicada')patch.fecha_publicacion=new Date().toISOString();const {error}=await db.from('vacantes').update(patch).eq('id',j.id);if(error){notice('formNotice','No se pudo cambiar el estado: '+error.message,'error');return;}await loadJobs();return;}if(del){const j=allJobs.find(x=>x.id===del.dataset.delete);if(!j||!confirm('¿Eliminar definitivamente “'+j.titulo+'”?'))return;const {error}=await db.from('vacantes').delete().eq('id',j.id);if(error){notice('formNotice','No se pudo eliminar: '+error.message,'error');return;}resetForm();await loadJobs();}});
 $('newJob').addEventListener('click',()=>{resetForm();$('formCard').scrollIntoView({behavior:'smooth'});});$('resetForm').addEventListener('click',resetForm);$('cancelEdit').addEventListener('click',resetForm);$('refresh').addEventListener('click',loadJobs);$('filter').addEventListener('input',renderList);
 db.auth.getSession().then(({data})=>showApp(data.session));db.auth.onAuthStateChange((_event,session)=>{if(!session){$('appView').classList.add('hidden');$('loginView').classList.remove('hidden');$('logout').classList.add('hidden');}});
+
+// Asistente IA - Etapa 1: interfaz y captura de fuente (sin llamadas externas todavía).
+(function(){
+ const mode=document.getElementById('assistantMode');
+ if(!mode) return;
+ const urlField=document.getElementById('assistantUrlField');
+ const textField=document.getElementById('assistantTextField');
+ const noticeBox=document.getElementById('assistantStageNotice');
+ mode.addEventListener('change',()=>{
+   urlField.classList.toggle('hidden',mode.value!=='url');
+   textField.classList.toggle('hidden',mode.value!=='text');
+   noticeBox.className='notice'; noticeBox.textContent='';
+ });
+ document.getElementById('assistantClear').addEventListener('click',()=>{
+   document.getElementById('assistantUrl').value='';
+   document.getElementById('assistantText').value='';
+   noticeBox.className='notice'; noticeBox.textContent='';
+ });
+ document.getElementById('assistantPrepare').addEventListener('click',()=>{
+   const source=mode.value==='url'?document.getElementById('assistantUrl').value.trim():document.getElementById('assistantText').value.trim();
+   if(!source){noticeBox.textContent=mode.value==='url'?'Pega primero el enlace de la oportunidad.':'Pega primero la descripción de la oportunidad.';noticeBox.className='notice show error';return;}
+   if(mode.value==='url'&&!/^https?:\\/\\//i.test(source)){noticeBox.textContent='El enlace debe comenzar por https:// o http://.';noticeBox.className='notice show error';return;}
+   if(mode.value==='url') document.getElementById('sourceUrl').value=source;
+   else document.getElementById('description').value=source.slice(0,1500);
+   noticeBox.textContent=mode.value==='url'?'Enlace transferido al extractor actual. Pulsa “Extraer información” en el formulario. Si la plataforma bloquea la lectura, pega su descripción en el modo manual.':'Descripción copiada al formulario. La traducción, clasificación y extracción automática con IA se implementarán en la etapa 2. Revisa los demás campos antes de guardar.';
+   noticeBox.className='notice show ok';
+   document.getElementById('formCard').scrollIntoView({behavior:'smooth',block:'start'});
+ });
+})();
+
 </script>
 </body></html>
