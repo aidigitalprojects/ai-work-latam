@@ -76,9 +76,40 @@ function resetForm(){ $('jobForm').reset();$('sourceUrl').value='';setExtractMes
 function fillForm(j){$('jobId').value=j.id;$('title').value=j.titulo||'';$('company').value=j.empresa||'';$('category').value=j.categoria||'Evaluación de IA';$('location').value=j.ubicacion||'';$('language').value=j.idioma||'';$('type').value=j.modalidad||'';$('salary').value=j.salario||'';$('description').value=j.descripcion||'';$('officialUrl').value=j.url_oficial||'';$('referralUrl').value=j.url_referido||'';$('generalReferralUrl').value=j.url_referido_general||'';$('referralType').value=j.tipo_referido||((j.url_referido)?'directo':'ninguno');syncReferralFields();$('sourceUrl').value=j.url_referido||j.url_referido_general||j.url_oficial||'';$('status').value=j.estado||'borrador';$('formTitle').textContent='Editar vacante';$('saveJob').textContent='Guardar cambios';$('cancelEdit').classList.remove('hidden');clearNotice('formNotice');$('formCard').scrollIntoView({behavior:'smooth',block:'start'});}
 function renderList(){const q=$('filter').value.trim().toLocaleLowerCase('es');const rows=allJobs.filter(j=>[j.titulo,j.empresa,j.categoria].join(' ').toLocaleLowerCase('es').includes(q));$('totalCount').textContent=allJobs.length;$('publishedCount').textContent=allJobs.filter(j=>j.estado==='publicada').length;$('draftCount').textContent=allJobs.filter(j=>j.estado==='borrador').length;$('closedCount').textContent=allJobs.filter(j=>j.estado==='cerrada').length;if(!rows.length){$('jobsList').innerHTML='<div class="empty">No hay vacantes que coincidan con la búsqueda.</div>';return;}$('jobsList').innerHTML=rows.map(j=>`<article class="job"><div class="row"><div><h3>${esc(j.titulo)}</h3><div class="small">${esc(j.empresa)} · ${esc(j.categoria||'Sin categoría')}</div></div>${statePill(j.estado)}</div><div class="actions" style="margin-top:10px"><button class="btn secondary" data-edit="${j.id}">Editar</button><button class="btn ghost" data-toggle="${j.id}">${j.estado==='publicada'?'Pasar a borrador':j.estado==='cerrada'?'Reabrir':'Publicar'}</button><button class="btn danger" data-delete="${j.id}">Eliminar</button></div></article>`).join('');}
 async function loadJobs(){ $('jobsList').innerHTML='<div class="empty">Cargando vacantes…</div>';const {data,error}=await db.from('vacantes').select('*').order('created_at',{ascending:false});if(error){$('jobsList').innerHTML='';notice('formNotice','No se pudieron cargar las vacantes: '+error.message,'error');return;}allJobs=data||[];renderList();}
-async function showApp(session){if(!session){$('appView').classList.add('hidden');$('loginView').classList.remove('hidden');$('logout').classList.add('hidden');return;}
-const {data:admin,error}=await db.rpc('is_admin');if(error||admin!==true){await db.auth.signOut();$('loginView').classList.remove('hidden');$('appView').classList.add('hidden');notice('loginNotice','Esta cuenta no tiene autorización de administrador. Verifica que su UID esté registrado en admin_users.','error');return;}
-$('loginView').classList.add('hidden');$('appView').classList.remove('hidden');$('logout').classList.remove('hidden');await loadJobs();}
+async function showApp(session){
+ if(!session){
+  $('appView').classList.add('hidden');
+  $('loginView').classList.remove('hidden');
+  $('logout').classList.add('hidden');
+  return;
+ }
+ try{
+  const {data:admin,error}=await db.rpc('is_admin');
+  if(error){
+   $('loginView').classList.remove('hidden');
+   $('appView').classList.add('hidden');
+   $('logout').classList.remove('hidden');
+   notice('loginNotice','La contraseña fue aceptada, pero falló la comprobación de permisos en Supabase: '+error.message+'. La sesión se conserva.','error');
+   return;
+  }
+  if(admin!==true){
+   $('loginView').classList.remove('hidden');
+   $('appView').classList.add('hidden');
+   $('logout').classList.remove('hidden');
+   notice('loginNotice','La sesión se inició, pero Supabase no reconoce esta cuenta como administradora. Revisa el registro de su UID en admin_users y la función is_admin(). La sesión se conserva.','error');
+   return;
+  }
+  $('loginView').classList.add('hidden');
+  $('appView').classList.remove('hidden');
+  $('logout').classList.remove('hidden');
+  await loadJobs();
+ }catch(err){
+  $('loginView').classList.remove('hidden');
+  $('appView').classList.add('hidden');
+  $('logout').classList.remove('hidden');
+  notice('loginNotice','Se inició sesión, pero ocurrió un error al abrir el panel: '+(err?.message||String(err)), 'error');
+ }
+}
 // Extracción básica desde el navegador: depende de que el sitio permita CORS.
 function setExtractMessage(msg,isError=false){const el=$('extractNotice');el.textContent=msg;el.style.color=isError?'#b91c1c':'#64748b';}
 function cleanText(v){return String(v||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();}
@@ -101,7 +132,23 @@ $('extractBtn').addEventListener('click',async()=>{
  }catch(err){setExtractMessage('No fue posible extraer automáticamente (la plataforma puede bloquear solicitudes externas). El enlace oficial quedó registrado. Completa el enlace de referido correspondiente antes de publicar. Completa los datos manualmente.',true);}finally{$('extractBtn').disabled=false;}
 });
 $('sourceUrl').addEventListener('input',()=>{if($('referralType').value==='directo'&&!$('referralUrl').value.trim())$('referralUrl').value=$('sourceUrl').value.trim();});
-$('loginForm').addEventListener('submit',async e=>{e.preventDefault();clearNotice('loginNotice');const {data,error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error){notice('loginNotice','No se pudo iniciar sesión: '+error.message,'error');return;}await showApp(data.session);});
+$('loginForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+ clearNotice('loginNotice');
+ const button=$('loginForm').querySelector('button[type="submit"]');
+ button.disabled=true;
+ button.textContent='Verificando…';
+ try{
+  const {data,error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+  if(error){notice('loginNotice','No se pudo iniciar sesión: '+error.message,'error');return;}
+  await showApp(data.session);
+ }catch(err){
+  notice('loginNotice','Error al conectar con Supabase: '+(err?.message||String(err)),'error');
+ }finally{
+  button.disabled=false;
+  button.textContent='Entrar al panel';
+ }
+});
 $('logout').addEventListener('click',async()=>{await db.auth.signOut();resetForm();await showApp(null);});
 $('jobForm').addEventListener('submit',async e=>{e.preventDefault();clearNotice('formNotice');const id=$('jobId').value;const payload={titulo:$('title').value.trim(),empresa:$('company').value.trim(),categoria:$('category').value,ubicacion:$('location').value.trim(),idioma:$('language').value.trim(),modalidad:$('type').value.trim(),salario:$('salary').value.trim(),descripcion:$('description').value.trim(),url_oficial:$('officialUrl').value.trim()||null,url_referido:$('referralType').value==='directo'?($('referralUrl').value.trim()||null):null,url_referido_general:$('referralType').value==='general'?($('generalReferralUrl').value.trim()||null):null,tipo_referido:$('referralType').value,estado:$('status').value,fecha_verificacion:new Date().toISOString().slice(0,10),updated_at:new Date().toISOString()};const effectiveReferral=payload.tipo_referido==='directo'?payload.url_referido:payload.tipo_referido==='general'?payload.url_referido_general:null;if(payload.estado==='publicada'&&!effectiveReferral){notice('formNotice','No se puede publicar sin un enlace de referido válido. Guarda como borrador o agrega el enlace de referido.','error');return;}if(payload.estado==='publicada'&&!id)payload.fecha_publicacion=new Date().toISOString();if(payload.estado==='publicada'&&id){const old=allJobs.find(x=>x.id===id);if(old&&old.estado!=='publicada')payload.fecha_publicacion=new Date().toISOString();}
 const query=id?db.from('vacantes').update(payload).eq('id',id):db.from('vacantes').insert(payload);const {error}=await query;if(error){notice('formNotice','No se pudo guardar: '+error.message,'error');return;}notice('formNotice',id?'Vacante actualizada correctamente.':'Vacante creada correctamente.');resetForm();await loadJobs();});
