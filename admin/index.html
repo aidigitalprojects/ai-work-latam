@@ -1,3 +1,4 @@
+```
 <!doctype html>
 <html lang="es">
 <head>
@@ -15,13 +16,13 @@
 <main id="appView" class="hidden"><div class="row"><div><div class="small">GESTIÓN DE CONTENIDO</div><h1 class="h1">Panel de control</h1><p class="muted">Administra las ofertas y sus enlaces de referido.</p></div><button id="newJob" class="btn">+ Nueva vacante</button></div>
 
 <section class="card" id="aiAssistantCard" style="margin:18px 0;border:1px solid #c4b5fd;background:linear-gradient(135deg,#fff 0%,#f5f3ff 100%)">
-  <div class="row" style="align-items:flex-start"><div><div class="small" style="color:#6d28d9;font-weight:800">NUEVA HERRAMIENTA</div><h2 style="margin:2px 0 4px;font-size:21px">Asistente IA de vacantes</h2><p class="muted" style="margin:0">Prepara la información de una oportunidad para completar el formulario de registro.</p></div><span class="pill" style="background:#ede9fe;color:#5b21b6">Etapa 1 · Interfaz</span></div>
+  <div class="row" style="align-items:flex-start"><div><div class="small" style="color:#6d28d9;font-weight:800">NUEVA HERRAMIENTA</div><h2 style="margin:2px 0 4px;font-size:21px">Asistente de preparación de vacantes</h2><p class="muted" style="margin:0">Pega una descripción y el sistema sugerirá campos usando reglas locales, sin enviar datos a servicios externos.</p></div><span class="pill" style="background:#ede9fe;color:#5b21b6">Etapa 2 · Asistente local</span></div>
   <div class="field"><label for="assistantMode">¿Cómo quieres proporcionar la información?</label><select id="assistantMode"><option value="url">Tengo el enlace de la vacante</option><option value="text">Voy a pegar la descripción</option></select></div>
   <div class="field" id="assistantUrlField"><label for="assistantUrl">Enlace de la oportunidad</label><input id="assistantUrl" type="url" placeholder="https://jobs.micro1.ai/post/..."></div>
   <div class="field hidden" id="assistantTextField"><label for="assistantText">Descripción original de la oportunidad</label><textarea id="assistantText" maxlength="12000" rows="7" placeholder="Pega aquí la descripción completa en inglés o español..."></textarea></div>
   <div class="actions"><button type="button" class="btn" id="assistantPrepare">Preparar información</button><button type="button" class="btn ghost" id="assistantClear">Limpiar</button></div>
   <div id="assistantStageNotice" class="notice" aria-live="polite"></div>
-  <p class="small" style="margin-bottom:0">Etapa 1: interfaz y captura. En la etapa 2 conectaremos el análisis automático con IA. No se publicará ni guardará ninguna vacante automáticamente.</p>
+  <p class="small" style="margin-bottom:0">Asistente local sin API: detecta posibles datos en el texto pegado. Son sugerencias que debes revisar. Nada se guarda ni publica automáticamente.</p>
 </section>
 
 <div class="grid"><div class="card stat"><strong id="totalCount">0</strong><span>Total registradas</span></div><div class="card stat"><strong id="publishedCount">0</strong><span>Publicadas</span></div><div class="card stat"><strong id="draftCount">0</strong><span>En borrador</span></div><div class="card stat"><strong id="closedCount">0</strong><span>Cerradas</span></div></div>
@@ -156,7 +157,7 @@ $('jobsList').addEventListener('click',async e=>{const edit=e.target.closest('[d
 $('newJob').addEventListener('click',()=>{resetForm();$('formCard').scrollIntoView({behavior:'smooth'});});$('resetForm').addEventListener('click',resetForm);$('cancelEdit').addEventListener('click',resetForm);$('refresh').addEventListener('click',loadJobs);$('filter').addEventListener('input',renderList);
 db.auth.getSession().then(({data})=>showApp(data.session));db.auth.onAuthStateChange((_event,session)=>{if(!session){$('appView').classList.add('hidden');$('loginView').classList.remove('hidden');$('logout').classList.add('hidden');}});
 
-// Asistente IA - Etapa 1: interfaz y captura de fuente (sin llamadas externas todavía).
+// Asistente local: análisis básico del texto pegado, sin llamadas externas ni API.
 (function(){
  const mode=document.getElementById('assistantMode');
  if(!mode) return;
@@ -173,13 +174,36 @@ db.auth.getSession().then(({data})=>showApp(data.session));db.auth.onAuthStateCh
    document.getElementById('assistantText').value='';
    noticeBox.className='notice'; noticeBox.textContent='';
  });
+ function suggestFromText(text){
+   const raw=text.replace(/\r/g,'');
+   const lines=raw.split('\n').map(x=>x.trim()).filter(Boolean);
+   const flat=raw.replace(/\s+/g,' ');
+   const found=[];
+   const put=(id,value,label,max=180)=>{const el=document.getElementById(id);if(value&&!el.value.trim()){el.value=String(value).trim().slice(0,max);found.push(label);}};
+   const first=(lines[0]||'').replace(/^[#>*\-\s]+/,'').trim();
+   if(first.length>2&&first.length<=110&&!/^(about|description|responsibilities|requirements|overview|job description)$/i.test(first))put('title',first,'título');
+   let m=raw.match(/(?:company|empresa|employer|hiring organization)\s*[:\-]\s*([^\n|]{2,100})/i);if(m)put('company',m[1],'empresa',100);
+   m=flat.match(/(?:location|ubicación|based in|residence)\s*[:\-]\s*([^.;|]{2,100})/i);if(m)put('location',m[1],'ubicación',160);
+   else {m=flat.match(/\b(LATAM|Latin America|Colombia|Mexico|Argentina|Peru|Chile|Brazil|remote worldwide)\b/i);if(m)put('location',/remote|remoto/i.test(flat)?'Remoto · '+m[1]:m[1],'ubicación',160);}
+   if(/\b(spanish|español|bilingual|bilingüe)\b/i.test(flat))put('language',/\b(english|inglés)\b/i.test(flat)?'Español e inglés':'Español','idioma');else if(/\b(english|inglés)\b/i.test(flat))put('language','Inglés','idioma');
+   if(/\b(contractor|independent contractor|freelance)\b/i.test(flat))put('type','Contratista / freelance','modalidad',120);else if(/\b(full[- ]time|part[- ]time)\b/i.test(flat))put('type',/part[- ]time/i.test(flat)?'Medio tiempo':'Tiempo completo','modalidad',120);
+   m=flat.match(/(?:salary|pay|compensation|rate|payment|salario|pago|tarifa)\s*[:\-]?\s*((?:USD|US\$|\$|EUR)?\s?\d[\d,.]*(?:\s?\/\s?(?:hour|hr|h|month|mo|year|mes|hora))?)/i);if(m)put('salary',m[1],'salario/tarifa',100);
+   const cats=[[/video annotation|video recording|multimedia/,'Video y multimedia'],[/data annotation|labeling|labelling|image annotation/,'Anotación de datos'],[/audio|speech|transcri|voice recording|linguistic/,'Idioma y audio'],[/software engineer|developer|wordpress|frontend|backend/,'Ingeniería web y software'],[/search quality|search evaluator|relevance|ads evaluator/,'Búsqueda y relevancia'],[/data quality|quality analyst|data validation/,'Calidad de datos'],[/ai trainer|model evaluator|ai evaluator|model evaluation|red team/,'Evaluación de IA'],[/expert|subject matter|accountant|lawyer|medical|finance/,'Expertos de dominio'],[/data collection|data collector/,'Recopilación de datos']];
+   for(const [re,cat] of cats){if(re.test(flat.toLowerCase())){const el=document.getElementById('category');if([...el.options].some(o=>o.text===cat)){el.value=cat;found.push('categoría');}break;}}
+   put('description',raw,'descripción',1500);
+   return found;
+ }
  document.getElementById('assistantPrepare').addEventListener('click',()=>{
    const source=mode.value==='url'?document.getElementById('assistantUrl').value.trim():document.getElementById('assistantText').value.trim();
    if(!source){noticeBox.textContent=mode.value==='url'?'Pega primero el enlace de la oportunidad.':'Pega primero la descripción de la oportunidad.';noticeBox.className='notice show error';return;}
-   if(mode.value==='url' && !(source.startsWith('https://') || source.startsWith('http://'))){noticeBox.textContent='El enlace debe comenzar por https:// o http://.';noticeBox.className='notice show error';return;}
-   if(mode.value==='url') document.getElementById('sourceUrl').value=source;
-   else document.getElementById('description').value=source.slice(0,1500);
-   noticeBox.textContent=mode.value==='url'?'Enlace transferido al extractor actual. Pulsa “Extraer información” en el formulario. Si la plataforma bloquea la lectura, pega su descripción en el modo manual.':'Descripción copiada al formulario. La traducción, clasificación y extracción automática con IA se implementarán en la etapa 2. Revisa los demás campos antes de guardar.';
+   if(mode.value==='url'&&!/^https?:\/\//i.test(source)){noticeBox.textContent='El enlace debe comenzar por https:// o http://.';noticeBox.className='notice show error';return;}
+   if(mode.value==='url'){
+     document.getElementById('sourceUrl').value=source;
+     noticeBox.textContent='Enlace transferido. Pulsa “Extraer información” en el formulario. Si la plataforma bloquea la lectura, pega aquí su descripción.';
+   }else{
+     const fields=suggestFromText(source);
+     noticeBox.textContent=fields.length?'Se copió la descripción y se sugirieron: '+fields.join(', ')+'. Revisa los resultados; pueden contener errores. Los campos que ya tenían contenido no se sobrescribieron.':'Se copió la descripción. No se detectaron otros campos con suficiente confianza; complétalos manualmente.';
+   }
    noticeBox.className='notice show ok';
    document.getElementById('formCard').scrollIntoView({behavior:'smooth',block:'start'});
  });
@@ -187,3 +211,4 @@ db.auth.getSession().then(({data})=>showApp(data.session));db.auth.onAuthStateCh
 
 </script>
 </body></html>
+```
