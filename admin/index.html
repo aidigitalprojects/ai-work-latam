@@ -182,15 +182,21 @@ db.auth.getSession().then(({data})=>showApp(data.session));db.auth.onAuthStateCh
    const put=(id,value,label,max=180)=>{const el=document.getElementById(id);if(value&&!el.value.trim()){el.value=String(value).trim().slice(0,max);found.push(label);}};
    const first=(lines[0]||'').replace(/^[#>*\-\s]+/,'').trim();
    if(first.length>2&&first.length<=110&&!/^(about|description|responsibilities|requirements|overview|job description)$/i.test(first))put('title',first,'título');
-   let m=raw.match(/(?:company|empresa|employer|hiring organization)\s*[:\-]\s*([^\n|]{2,100})/i);if(m)put('company',m[1],'empresa',100);
+   let m=raw.match(/(?:company|empresa|employer|hiring organization)\s*[:\-]\s*([^\n|]{2,100})/i);
+   if(!m)m=raw.match(/(?:^|\n)\s*#{0,3}\s*about\s+([A-Za-z0-9][A-Za-z0-9 .&'-]{1,60})\s*(?=\n|$)/i);
+   if(!m)m=raw.match(/(?:^|\n)\s*([A-Za-z0-9][A-Za-z0-9 .&'-]{1,40})\s+is\s+(?:a|an|the)\s+(?:data lab|company|platform|business|technology company)/i);
+   if(m)put('company',m[1].replace(/\s+/g,' ').trim(),'empresa',100);
    m=flat.match(/(?:location|ubicación|based in|residence)\s*[:\-]\s*([^.;|]{2,100})/i);if(m)put('location',m[1],'ubicación',160);
+   else if(/global\s*,?\s*fully remote|worldwide\s*,?\s*remote/i.test(flat))put('location','Global · Remoto','ubicación',160);
    else {m=flat.match(/\b(LATAM|Latin America|Colombia|Mexico|Argentina|Peru|Chile|Brazil|remote worldwide)\b/i);if(m)put('location',/remote|remoto/i.test(flat)?'Remoto · '+m[1]:m[1],'ubicación',160);}
    if(/\b(spanish|español|bilingual|bilingüe)\b/i.test(flat))put('language',/\b(english|inglés)\b/i.test(flat)?'Español e inglés':'Español','idioma');else if(/\b(english|inglés)\b/i.test(flat))put('language','Inglés','idioma');
-   if(/\b(contractor|independent contractor|freelance)\b/i.test(flat))put('type','Contratista / freelance','modalidad',120);else if(/\b(full[- ]time|part[- ]time)\b/i.test(flat))put('type',/part[- ]time/i.test(flat)?'Medio tiempo':'Tiempo completo','modalidad',120);
-   m=flat.match(/(?:salary|pay|compensation|rate|payment|salario|pago|tarifa)\s*[:\-]?\s*((?:USD|US\$|\$|EUR)?\s?\d[\d,.]*(?:\s?\/\s?(?:hour|hr|h|month|mo|year|mes|hora))?)/i);if(m)put('salary',m[1],'salario/tarifa',100);
+   if(/\b(contractor|independent contractor|freelance)\b/i.test(flat)){const hrs=flat.match(/(?:~|approximately|about)?\s*(\d{1,2})\s*hours?\s*(?:per|a)\s*week/i);put('type','Contratista'+(hrs?' · '+hrs[1]+' horas/semana':' / freelance'),'modalidad',120);}else if(/\b(full[- ]time|part[- ]time)\b/i.test(flat))put('type',/part[- ]time/i.test(flat)?'Medio tiempo':'Tiempo completo','modalidad',120);
+   m=raw.match(/(?:USD\s*)?\$\s*\d[\d,.]*\s*(?:-|–|to)\s*(?:USD\s*)?\$\s*\d[\d,.]*\s*(?:\/\s*(?:hour|hr|month|year|week|hora|mes)|per\s+(?:hour|hr|month|year|week))?/i);
+   if(!m)m=raw.match(/(?:salary|pay|compensation|rate|payment|salario|pago|tarifa)\s*[:\-]?\s*((?:USD|US\$|\$|EUR)?\s?\d[\d,.]*(?:\s?\/\s?(?:hour|hr|h|month|mo|year|mes|hora))?)/i);
+   if(m)put('salary',(m[1]||m[0]).replace(/\s+/g,' ').trim(),'salario/tarifa',100);
    const cats=[[/video annotation|video recording|multimedia/,'Video y multimedia'],[/data annotation|labeling|labelling|image annotation/,'Anotación de datos'],[/audio|speech|transcri|voice recording|linguistic/,'Idioma y audio'],[/software engineer|developer|wordpress|frontend|backend/,'Ingeniería web y software'],[/search quality|search evaluator|relevance|ads evaluator/,'Búsqueda y relevancia'],[/data quality|quality analyst|data validation/,'Calidad de datos'],[/ai trainer|model evaluator|ai evaluator|model evaluation|red team/,'Evaluación de IA'],[/expert|subject matter|accountant|lawyer|medical|finance/,'Expertos de dominio'],[/data collection|data collector/,'Recopilación de datos']];
    for(const [re,cat] of cats){if(re.test(flat.toLowerCase())){const el=document.getElementById('category');if([...el.options].some(o=>o.text===cat)){el.value=cat;found.push('categoría');}break;}}
-   put('description',raw,'descripción',1500);
+   put('description',raw,'descripción',raw.length);
    return found;
  }
  document.getElementById('assistantPrepare').addEventListener('click',()=>{
