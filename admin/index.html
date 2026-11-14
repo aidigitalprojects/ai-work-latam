@@ -176,7 +176,7 @@ db.auth.getSession().then(({data})=>showApp(data.session));db.auth.onAuthStateCh
  document.getElementById('assistantPrepare').addEventListener('click',()=>{
    const source=mode.value==='url'?document.getElementById('assistantUrl').value.trim():document.getElementById('assistantText').value.trim();
    if(!source){noticeBox.textContent=mode.value==='url'?'Pega primero el enlace de la oportunidad.':'Pega primero la descripción de la oportunidad.';noticeBox.className='notice show error';return;}
-   if(mode.value==='url'&&!/^https?:\\/\\//i.test(source)){noticeBox.textContent='El enlace debe comenzar por https:// o http://.';noticeBox.className='notice show error';return;}
+   if(mode.value==='url' && !(source.startsWith('https://') || source.startsWith('http://'))){noticeBox.textContent='El enlace debe comenzar por https:// o http://.';noticeBox.className='notice show error';return;}
    if(mode.value==='url') document.getElementById('sourceUrl').value=source;
    else document.getElementById('description').value=source.slice(0,1500);
    noticeBox.textContent=mode.value==='url'?'Enlace transferido al extractor actual. Pulsa “Extraer información” en el formulario. Si la plataforma bloquea la lectura, pega su descripción en el modo manual.':'Descripción copiada al formulario. La traducción, clasificación y extracción automática con IA se implementarán en la etapa 2. Revisa los demás campos antes de guardar.';
